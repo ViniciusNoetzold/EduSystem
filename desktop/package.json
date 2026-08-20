@@ -1,0 +1,55 @@
+{
+  "name": "edusystem-desktop",
+  "version": "1.5.0",
+  "description": "EduSystem Gestão Escolar Desktop",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable --config.directories.output=dist-final"
+  },
+  "devDependencies": {
+    "electron": "latest",
+    "electron-builder": "latest"
+  },
+  "build": {
+    "appId": "com.edusystem.gestao",
+    "productName": "EduSystem",
+    "asar": true,
+    "asarUnpack": [
+      "server/**"
+    ],
+    "files": [
+      "main.js",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web/dist"
+      },
+      {
+        "from": "../server",
+        "to": "server",
+        "filter": [
+          "**/*",
+          "!node_modules/.cache/**",
+          "!puppeteer-cache/**",
+          "!data/database.sqlite-shm",
+          "!data/database.sqlite-wal"
+        ]
+      },
+      {
+        "from": "../server/node_modules",
+        "to": "server/node_modules"
+      }
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "portable"
+      ],
+      "artifactName": "EduSystem-Portable-${version}.exe"
+    }
+  }
+}

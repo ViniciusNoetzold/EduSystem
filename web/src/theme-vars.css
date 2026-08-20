@@ -1,0 +1,61 @@
+:root {
+  color-scheme: dark;
+  --app-bg: #0a0e1a;
+  --text: #f5f8fc;
+  --text-soft: #d7e0eb;
+  --muted: #a2afc1;
+  --border: rgba(255, 255, 255, 0.15);
+  --teal: #2dd4bf;
+  --cobalt: #5b7cff;
+  --violet: #9b7cff;
+  --glass-bg: rgba(255, 255, 255, 0.06);
+  --glass-bg-hover: rgba(255, 255, 255, 0.085);
+  --glass-bg-strong: rgba(12, 18, 31, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.15);
+  --glass-highlight: rgba(255, 255, 255, 0.25);
+  --glass-input: rgba(7, 12, 23, 0.48);
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.35);
+  --shadow-glow:
+    0 0 0 1px rgba(45, 212, 191, 0.12), 0 12px 36px rgba(45, 212, 191, 0.12);
+  --radius-panel: 1.5rem;
+  --radius-control: 9999px;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  background: var(--glass-input);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+textarea {
+  border-radius: 1rem;
+  resize: vertical;
+}
+
+select {
+  color-scheme: dark;
+}
+
+select option {
+  background: #111827;
+  color: var(--text);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--teal);
+  background: rgba(10, 18, 31, 0.72);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12);
+}

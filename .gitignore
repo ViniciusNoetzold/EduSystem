@@ -1,0 +1,41 @@
+# Dependências
+**/node_modules/
+
+# Builds e pacotes locais
+web/dist/
+desktop/dist/
+desktop/dist-final/
+build/
+dist/
+output/
+tmp/
+
+# Bancos e dados locais
+server/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.test-data-*/
+
+# Puppeteer/Chrome local
+server/puppeteer-cache/
+
+# Configuração e segredos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python legado/temporário
+__pycache__/
+*.pyc
+.venv/
+
+# Sistema e editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+

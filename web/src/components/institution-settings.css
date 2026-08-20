@@ -1,0 +1,240 @@
+.institution-settings {
+  display: grid;
+  gap: 17px;
+}
+.settings-panel {
+  padding: 22px;
+}
+.settings-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 19px;
+}
+.settings-panel-title h3 {
+  margin: 0 0 4px;
+}
+.settings-icon {
+  height: 38px;
+  width: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: #153b42;
+  color: #5ee4d0;
+}
+.institution-type-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.institution-type {
+  position: relative;
+  min-height: 105px;
+  text-align: left;
+  padding: 14px;
+  border: 1px solid #2a3645;
+  border-radius: 12px;
+  background: #111a24;
+  color: #cfd8e5;
+  cursor: pointer;
+}
+.institution-type:hover {
+  border-color: #2dd4bf;
+}
+.institution-type.selected {
+  border-color: #2dd4bf;
+  background: linear-gradient(135deg, #14363d, #17293b);
+  box-shadow: 0 0 0 2px #2dd4bf1c;
+}
+.institution-type strong,
+.institution-type span {
+  display: block;
+}
+.institution-type strong {
+  font-size: 13px;
+  color: #edf3f7;
+  margin-bottom: 7px;
+}
+.institution-type span {
+  font-size: 10px;
+  color: #8494a7;
+  line-height: 1.5;
+  max-width: 220px;
+}
+.institution-type svg {
+  position: absolute;
+  right: 11px;
+  top: 11px;
+  color: #5ee4d0;
+}
+.settings-fields {
+  margin-top: 17px;
+}
+.settings-fields label {
+  display: grid;
+  gap: 6px;
+  color: #aebacc;
+  font-size: 11px;
+  font-weight: 600;
+}
+.settings-fields input {
+  height: 40px;
+  padding: 0 11px;
+  border: 1px solid #2c3847;
+  border-radius: 9px;
+  background: #10161f;
+  color: #e8eef6;
+}
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 9px;
+}
+.module-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #2b3746;
+  border-radius: 9px;
+  background: #101720;
+  color: #8797aa;
+  font-size: 11px;
+  cursor: pointer;
+}
+.module-toggle input {
+  accent-color: #2dd4bf;
+}
+.module-toggle.active {
+  border-color: #286b68;
+  color: #cdeee8;
+  background: #112d31;
+}
+.module-toggle i {
+  margin-left: auto;
+  font-size: 9px;
+  font-style: normal;
+  color: #6e7d90;
+}
+.module-toggle.active i {
+  color: #5ee4d0;
+}
+.settings-save {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.settings-saved {
+  font-size: 11px;
+  color: #5ee4d0;
+}
+.planned-badge {
+  margin-left: auto;
+  padding: 5px 9px;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 99px;
+  color: #fcd78c;
+  background: rgba(245, 158, 11, 0.1);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.sync-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+.sync-flow article {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 10px;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.sync-flow article svg {
+  grid-row: 1/3;
+  color: var(--teal);
+}
+.sync-flow article strong,
+.sync-flow article span {
+  display: block;
+}
+.sync-flow article span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.sync-flow > i {
+  color: #7f91a8;
+  font-size: 10px;
+  font-style: normal;
+}
+.sync-rules {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+.sync-rules > div {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+.sync-rules svg {
+  flex: none;
+  color: #86a5ff;
+}
+.sync-rules strong {
+  display: block;
+  color: var(--text);
+}
+.sync-note {
+  margin: 13px 0 0;
+  padding: 11px 13px;
+  border-left: 2px solid var(--teal);
+  color: var(--muted);
+  background: rgba(45, 212, 191, 0.045);
+  font-size: 10px;
+  line-height: 1.55;
+}
+@media (max-width: 1000px) {
+  .institution-type-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .module-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 650px) {
+  .institution-type-grid,
+  .module-grid {
+    grid-template-columns: 1fr;
+  }
+  .settings-fields {
+    grid-template-columns: 1fr;
+  }
+  .settings-panel-title {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .planned-badge {
+    margin-left: 0;
+  }
+  .sync-flow,
+  .sync-rules {
+    grid-template-columns: 1fr;
+  }
+  .sync-flow > i {
+    text-align: center;
+  }
+}
