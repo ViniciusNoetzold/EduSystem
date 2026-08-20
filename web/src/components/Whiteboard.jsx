@@ -8,7 +8,6 @@ import {
   Eraser,
   Hand,
   ImagePlus,
-  Link2,
   Minus,
   MousePointer2,
   Palette,
@@ -42,14 +41,16 @@ import {
   connectorPath,
   eraseVectorShapes,
   getShapeBounds,
+  nearestConnectorSide,
   normalizeBox,
 } from "./whiteboard-geometry";
 import "./advanced-whiteboard.css";
 
 Konva.capturePointerEventsEnabled = true;
 
-const STAGE_WIDTH = 1200;
-const STAGE_HEIGHT = 680;
+const VIEWPORT_HEIGHT = 680;
+const WORLD_WIDTH = 8000;
+const WORLD_HEIGHT = 5000;
 const HISTORY_LIMIT = 80;
 const TOOLS = [
   ["select", MousePointer2, "Selecionar, mover e redimensionar"],
@@ -60,8 +61,7 @@ const TOOLS = [
   ["rect", Square, "Retângulo"],
   ["circle", Circle, "Círculo"],
   ["line", Minus, "Linha"],
-  ["arrow", ArrowRight, "Seta livre"],
-  ["connector", Link2, "Conectar objetos"],
+  ["arrow", ArrowRight, "Seta livre (não conectada)"],
   ["sticky", StickyNote, "Post-it editável"],
   ["text", Type, "Texto editável"],
 ];
@@ -168,14 +168,16 @@ export default function Whiteboard({ notify }) {
   const [color, setColor] = useState("#2dd4bf");
   const [size, setSize] = useState(4);
   const [fill, setFill] = useState("transparent");
-  const [favorites, setFavorites] = useState(() =>
-    JSON.parse(localStorage.getItem("edusystem_colors") || "[]"),
-  );
+  const [favorites, setFavorites] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [draft, setDraft] = useState(null);
   const [history, setHistory] = useState([]);
   const [redo, setRedo] = useState([]);
   const [zoom, setZoom] = useState(1);
+  const [stageSize, setStageSize] = useState({
+    width: 1200,
+    height: VIEWPORT_HEIGHT,
+  });
   const [pointer, setPointer] = useState({ x: 0, y: 0, visible: false });
   const [editor, setEditor] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -187,6 +189,7 @@ export default function Whiteboard({ notify }) {
   const drawing = useRef(null);
   const shapesRef = useRef([]);
   const interactionBefore = useRef(null);
+  const preferencesReady = useRef(false);
 
   const visibleBoards = useMemo(
     () => boards.filter((item) => !board.pasta || item.pasta === board.pasta),
@@ -217,8 +220,37 @@ export default function Whiteboard({ notify }) {
   }, [board.shapes]);
 
   useEffect(() => {
-    localStorage.setItem("edusystem_colors", JSON.stringify(favorites));
+    api
+      .preference("whiteboard_favorite_colors")
+      .then(({ value }) => {
+        setFavorites(Array.isArray(value) ? value.slice(-12) : []);
+        preferencesReady.current = true;
+      })
+      .catch(() => {
+        preferencesReady.current = true;
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!preferencesReady.current) return;
+    api
+      .savePreference("whiteboard_favorite_colors", favorites)
+      .catch(() => {});
   }, [favorites]);
+
+  useEffect(() => {
+    const host = canvasHostRef.current;
+    if (!host) return undefined;
+    const updateSize = () =>
+      setStageSize({
+        width: Math.max(320, Math.floor(host.clientWidth)),
+        height: Math.max(520, Math.floor(host.clientHeight || VIEWPORT_HEIGHT)),
+      });
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const onKey = (event) => {
@@ -287,10 +319,7 @@ export default function Whiteboard({ notify }) {
     const stage = event.target.getStage();
     const point = stage.getRelativePointerPosition();
     if (!point) return null;
-    return {
-      x: Math.max(0, Math.min(STAGE_WIDTH, point.x)),
-      y: Math.max(0, Math.min(STAGE_HEIGHT, point.y)),
-    };
+    return { x: point.x, y: point.y };
   }
 
   function updatePointer(event) {
@@ -323,13 +352,14 @@ export default function Whiteboard({ notify }) {
     return modelIdFromNode(stage.getIntersection(point));
   }
 
-  function beginConnector(fromId, point, event) {
+  function beginConnector(fromId, point, event, fromSide) {
     if (!fromId || !point) return;
     if (event) event.cancelBubble = true;
     setSelectedId(fromId);
     drawing.current = {
       kind: "connector",
       fromId,
+      fromSide,
       start: point,
       before: snapshot(),
     };
@@ -356,10 +386,6 @@ export default function Whiteboard({ notify }) {
         changed: false,
       };
       eraseAtPoint(point);
-      return;
-    }
-    if (tool === "connector") {
-      beginConnector(modelIdFromNode(event.target), point);
       return;
     }
     if (tool === "pen" || tool === "highlighter") {
@@ -446,11 +472,14 @@ export default function Whiteboard({ notify }) {
     if (session.kind === "connector") {
       const toId = idAtPointer();
       if (toId && toId !== session.fromId) {
+        const target = shapesRef.current.find((item) => item.id === toId);
         const connector = {
           id: uid(),
           type: "connector",
           fromId: session.fromId,
           toId,
+          fromSide: session.fromSide,
+          toSide: nearestConnectorSide(target, point),
           stroke: color,
           strokeWidth: Math.max(2, size),
           pointerLength: 11,
@@ -458,7 +487,7 @@ export default function Whiteboard({ notify }) {
         };
         commit([...shapesRef.current, connector], session.before);
         setSelectedId(connector.id);
-      } else if (tool === "connector") {
+      } else {
         notify("Arraste até outro objeto para criar a conexão");
       }
       return;
@@ -622,6 +651,7 @@ export default function Whiteboard({ notify }) {
     const item = shapesRef.current.find((shape) => shape.id === current.id);
     if (item && item.text !== current.value)
       updateShape(current.id, { text: current.value }, true);
+    setSelectedId(current.id);
     setEditor(null);
   }
 
@@ -781,6 +811,7 @@ export default function Whiteboard({ notify }) {
       shapeType: type,
       draggable: tool === "select" && type !== "connector",
       listening: tool !== "hand",
+      onPointerDown: () => selectShape(item.id),
       onClick: () => selectShape(item.id),
       onTap: () => selectShape(item.id),
       onDragStart: startInteraction,
@@ -797,7 +828,7 @@ export default function Whiteboard({ notify }) {
   function renderConnector(item) {
     const from = shapesRef.current.find((shape) => shape.id === item.fromId);
     const to = shapesRef.current.find((shape) => shape.id === item.toId);
-    const points = connectorPath(from, to);
+    const points = connectorPath(from, to, item.fromSide, item.toSide);
     if (!points.length) return null;
     return (
       <Arrow
@@ -868,7 +899,7 @@ export default function Whiteboard({ notify }) {
             shadowColor="#000"
             shadowBlur={12}
             shadowOpacity={0.25}
-            listening={false}
+            listening
           />
           <Text
             x={14}
@@ -900,7 +931,9 @@ export default function Whiteboard({ notify }) {
         stroke="#62ead6"
         strokeWidth={2 / zoom}
         hitStrokeWidth={18 / zoom}
-        onPointerDown={(event) => beginConnector(selected.id, handle, event)}
+        onPointerDown={(event) =>
+          beginConnector(selected.id, handle, event, handle.side)
+        }
       />
     ));
   }
@@ -1003,15 +1036,16 @@ export default function Whiteboard({ notify }) {
         }
       : undefined;
 
-  function zoomAtPointer(direction) {
+  function zoomAtPointer(direction, suppliedPointer) {
     const currentStage = stageRef.current?.getStage();
     if (!currentStage) return;
     const oldScale = zoom;
-    const nextScale = Math.max(0.55, Math.min(1.8, oldScale + direction * 0.1));
-    const pointerPosition = currentStage.getPointerPosition() || {
-      x: currentStage.width() / 2,
-      y: currentStage.height() / 2,
-    };
+    const nextScale = Math.max(0.25, Math.min(3, oldScale + direction * 0.1));
+    const pointerPosition = suppliedPointer ||
+      currentStage.getPointerPosition() || {
+        x: currentStage.width() / 2,
+        y: currentStage.height() / 2,
+      };
     const logical = {
       x: (pointerPosition.x - currentStage.x()) / oldScale,
       y: (pointerPosition.y - currentStage.y()) / oldScale,
@@ -1285,9 +1319,9 @@ export default function Whiteboard({ notify }) {
               removidos por inteiro
             </span>
           )}
-          {tool === "connector" && (
+          {tool === "select" && selected && !["connector", "line", "arrow"].includes(selected.type) && (
             <span className="canvas-hint">
-              Conector · arraste de um objeto até outro
+              Arraste o objeto para mover · use os quatro pontos para conectá-lo
             </span>
           )}
           {editor && editorItem && editorStyle && (
@@ -1324,8 +1358,8 @@ export default function Whiteboard({ notify }) {
           )}
           <Stage
             ref={stageRef}
-            width={STAGE_WIDTH}
-            height={STAGE_HEIGHT}
+            width={stageSize.width}
+            height={stageSize.height}
             scaleX={zoom}
             scaleY={zoom}
             draggable={tool === "hand"}
@@ -1334,16 +1368,28 @@ export default function Whiteboard({ notify }) {
             onPointerUp={end}
             onPointerCancel={end}
             onWheel={(event) => {
+              if (event.evt.ctrlKey || event.evt.metaKey) {
+                event.evt.preventDefault();
+                zoomAtPointer(event.evt.deltaY > 0 ? -1 : 1);
+                return;
+              }
               if (tool !== "hand") return;
               event.evt.preventDefault();
-              zoomAtPointer(event.evt.deltaY > 0 ? -1 : 1);
+              const currentStage = event.target.getStage();
+              currentStage.position({
+                x: currentStage.x() - event.evt.deltaX,
+                y: currentStage.y() - event.evt.deltaY,
+              });
+              currentStage.batchDraw();
             }}
           >
             <Layer>
               <Rect
                 name="board-background"
-                width={STAGE_WIDTH}
-                height={STAGE_HEIGHT}
+                x={-WORLD_WIDTH / 2}
+                y={-WORLD_HEIGHT / 2}
+                width={WORLD_WIDTH}
+                height={WORLD_HEIGHT}
                 fill="rgba(0,0,0,0.001)"
               />
               {board.shapes
@@ -1383,7 +1429,7 @@ export default function Whiteboard({ notify }) {
               ? "Mão ativa: arraste para navegar sem alterar objetos"
               : selected
                 ? "Use os pontos ao redor do objeto para puxar uma conexão"
-                : "Selecione um objeto ou escolha uma ferramenta"}
+                : "Seta: selecione e mova objetos · Ctrl + rolagem: zoom"}
           </span>
         </div>
       </Card>

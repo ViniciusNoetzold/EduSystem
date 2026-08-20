@@ -31,8 +31,11 @@ Se a unidade `C:` não estiver disponível para escrita, os dados são criados n
 - chamada individual por aluno, turma e data;
 - relatórios profissionais em PDF para aluno e turma;
 - quadro branco com desenho, formas, textos, post-its, imagens, conectores e pastas;
+- seleção única para mover, redimensionar, editar e conectar objetos, com zoom por `Ctrl + rolagem`;
 - perfis Diretor, Coordenador, Professor, Secretário e Pais;
 - permissões e vínculos por usuário;
+- login obrigatório em toda abertura, salvando opcionalmente somente o identificador;
+- apresentação orientada no primeiro acesso de cada usuário;
 - banco SQLite persistente criado e migrado automaticamente.
 
 ## Arquitetura
@@ -91,6 +94,9 @@ Antes de abrir o banco em uma ferramenta externa, feche o EduSystem e copie `dat
 ## Segurança e dados
 
 - senhas são armazenadas com bcrypt;
+- o banco novo nasce sem alunos ou credenciais demonstrativas;
+- cada usuário possui conta, preferências, apresentação e quadros próprios;
+- a chave local de sessão é aleatória e exclusiva de cada instalação;
 - usuários e senhas nunca entram nos pacotes de transferência;
 - exclusões administrativas são lógicas e preservam o histórico;
 - arquivos `.sqlite`, `.env`, builds e dependências locais não são versionados;
@@ -104,4 +110,3 @@ server/   API Express, SQLite, relatórios e regras de negócio
 desktop/  processo Electron, ícones e configuração do portátil
 docs/     documentação operacional
 ```
-

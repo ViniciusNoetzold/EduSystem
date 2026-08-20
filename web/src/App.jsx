@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, NavLink, Route, Routes } from "react-router-dom";
 import {
   BarChart3,
@@ -61,6 +61,7 @@ import StudentsAdvanced from "./components/StudentsAdvanced";
 import GradesAdvanced from "./components/GradesAdvanced";
 import ReportsAdvanced from "./components/ReportsAdvanced";
 import TeamManagement from "./components/TeamManagement";
+import OnboardingTour from "./components/OnboardingTour";
 import GlassBackground from "./components/ui/GlassBackground";
 import { GlassCard, GlassDialogContent } from "./components/ui/GlassSurfaces";
 
@@ -94,25 +95,43 @@ function Toast({ message, onClose }) {
   );
 }
 function Login({ onLogin }) {
-  const [first, setFirst] = useState(!localStorage.getItem("gestao_user"));
+  const [first, setFirst] = useState(null);
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [identifier, setIdentifier] = useState(
+    () => localStorage.getItem("edusystem_last_login") || "",
+  );
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("Diretor");
-  const [remember, setRemember] = useState(true);
+  const [remember, setRemember] = useState(
+    () => Boolean(localStorage.getItem("edusystem_last_login")),
+  );
   const [error, setError] = useState("");
+  useEffect(() => {
+    api
+      .authStatus()
+      .then((status) => setFirst(Boolean(status.setupRequired)))
+      .catch((requestError) => {
+        setFirst(false);
+        setError(requestError.message);
+      });
+  }, []);
   async function submit(e) {
     e.preventDefault();
     setError("");
     try {
       const r = first
-        ? await api.register({ name, email, password, role })
-        : await api.login(email, password);
+        ? await api.register({
+            name,
+            username,
+            email: identifier,
+            password,
+          })
+        : await api.login(identifier, password);
       const user = { ...r.user, token: r.token };
-      (remember ? localStorage : sessionStorage).setItem(
-        "gestao_user",
-        JSON.stringify(user),
-      );
+      sessionStorage.setItem("gestao_user", JSON.stringify(user));
+      if (remember)
+        localStorage.setItem("edusystem_last_login", identifier.trim());
+      else localStorage.removeItem("edusystem_last_login");
       onLogin(user);
     } catch (e) {
       setError(e.message);
@@ -126,11 +145,19 @@ function Login({ onLogin }) {
           <img src={BRAND_LOGO} alt="EduSystem" />
         </div>
         <p className="eyebrow">EDUSYSTEM</p>
-        <h1>{first ? "Primeiro acesso" : "Bem-vinda de volta"}</h1>
+        <h1>
+          {first === null
+            ? "Preparando seu acesso"
+            : first
+              ? "Primeiro acesso"
+              : "Bem-vindo de volta"}
+        </h1>
         <p className="muted">
-          Dados reais, fluxos simples e uma escola mais organizada.
+          {first
+            ? "Crie a conta inicial do diretor para configurar a instituição."
+            : "Informe sua senha para acessar os dados protegidos deste computador."}
         </p>
-        <form onSubmit={submit}>
+        {first !== null && <form onSubmit={submit}>
           {first && (
             <>
               <label>
@@ -142,29 +169,25 @@ function Login({ onLogin }) {
                 />
               </label>
               <label>
-                Perfil
-                <select value={role} onChange={(e) => setRole(e.target.value)}>
-                  {[
-                    "Diretor",
-                    "Coordenador",
-                    "Professor",
-                    "Secretário",
-                    "Pais",
-                  ].map((x) => (
-                    <option key={x}>{x}</option>
-                  ))}
-                </select>
+                Nome de usuário
+                <input
+                  required
+                  minLength={3}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="ex.: ana.diretora"
+                />
               </label>
             </>
           )}
           <label>
-            E-mail
+            {first ? "E-mail" : "E-mail ou usuário"}
             <input
               required
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="diretora@escola.com"
+              type={first ? "email" : "text"}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder={first ? "direcao@escola.com" : "seu usuário ou e-mail"}
             />
           </label>
           <label>
@@ -184,16 +207,18 @@ function Login({ onLogin }) {
               checked={remember}
               onChange={(e) => setRemember(e.target.checked)}
             />{" "}
-            Lembrar de mim neste dispositivo
+            Salvar somente o e-mail/usuário neste dispositivo
           </label>
           {error && <p className="form-error">{error}</p>}
           <Button className="full">
             {first ? "Criar acesso" : "Entrar"} <ChevronRight size={16} />
           </Button>
-        </form>
-        <button className="text-button" onClick={() => setFirst(!first)}>
-          {first ? "Já tenho uma conta" : "Primeiro acesso"}
-        </button>
+        </form>}
+        {!first && first !== null && (
+          <p className="login-security-note">
+            A senha e a sessão nunca ficam salvas após fechar o EduSystem.
+          </p>
+        )}
       </div>
     </main>
   );
@@ -238,13 +263,11 @@ const nav = [
   ["Equipe e acessos", "/equipe", ShieldCheck, "diretor coordenador"],
 ];
 function App() {
-  const [user, setUser] = useState(() =>
-    JSON.parse(
-      localStorage.getItem("gestao_user") ||
-        sessionStorage.getItem("gestao_user") ||
-        "null",
-    ),
-  );
+  const [user, setUser] = useState(() => {
+    localStorage.removeItem("gestao_user");
+    sessionStorage.removeItem("gestao_user");
+    return null;
+  });
   const [config, setConfig] = useState(() =>
     JSON.parse(
       localStorage.getItem("edusystem_config") ||
@@ -274,6 +297,13 @@ function App() {
 function Shell({ user, setUser, config, setConfig }) {
   const [collapsed, setCollapsed] = useState(false);
   const [toast, setToast] = useState("");
+  const [tourOpen, setTourOpen] = useState(false);
+  useEffect(() => {
+    api
+      .preference("onboarding_completed")
+      .then(({ value }) => setTourOpen(value !== true))
+      .catch(() => setTourOpen(false));
+  }, [user.id]);
   const role = user.role.toLowerCase().replace("secretário", "secretario");
   const institutionModules = {
     escola: [
@@ -374,6 +404,14 @@ function Shell({ user, setUser, config, setConfig }) {
     sessionStorage.removeItem("gestao_user");
     setUser(null);
   }
+  const closeTour = useCallback(async () => {
+    setTourOpen(false);
+    try {
+      await api.savePreference("onboarding_completed", true);
+    } catch {
+      setToast("Não foi possível salvar a conclusão da apresentação");
+    }
+  }, []);
   return (
     <div className={cn("app-shell", collapsed && "sidebar-collapsed")}>
       <GlassBackground />
@@ -495,7 +533,11 @@ function Shell({ user, setUser, config, setConfig }) {
             <Route
               path="/configuracoes"
               element={
-                <InstitutionSettings config={config} setConfig={setConfig} />
+                <InstitutionSettings
+                  config={config}
+                  setConfig={setConfig}
+                  onOpenTour={() => setTourOpen(true)}
+                />
               }
             />
             <Route path="*" element={<Navigate to="/" replace />} />
@@ -503,6 +545,7 @@ function Shell({ user, setUser, config, setConfig }) {
         </main>
       </div>
       {toast && <Toast message={toast} onClose={() => setToast("")} />}
+      <OnboardingTour open={tourOpen} onClose={closeTour} />
     </div>
   );
 }

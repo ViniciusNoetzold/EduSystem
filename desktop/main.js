@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import net from "node:net";
+import { randomBytes } from "node:crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let backend;
@@ -64,11 +65,19 @@ function startBackend(port) {
   const serverPath = app.isPackaged
     ? path.join(process.resourcesPath, "server", "index.js")
     : path.join(__dirname, "..", "server", "index.js");
+  const dataDirectory = resolveDataDirectory();
+  const secretPath = path.join(dataDirectory, ".session-secret");
+  if (!fs.existsSync(secretPath))
+    fs.writeFileSync(secretPath, randomBytes(48).toString("hex"), {
+      encoding: "utf8",
+      mode: 0o600,
+    });
   const env = {
     ...process.env,
     ELECTRON_RUN_AS_NODE: "1",
     PORT: String(port),
-    EDUSYSTEM_DATA_DIR: resolveDataDirectory(),
+    EDUSYSTEM_DATA_DIR: dataDirectory,
+    JWT_SECRET: fs.readFileSync(secretPath, "utf8").trim(),
   };
   if (!app.isPackaged)
     env.PUPPETEER_CACHE_DIR = path.join(

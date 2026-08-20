@@ -1,6 +1,6 @@
 {
   "name": "edusystem-desktop",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "EduSystem Gestão Escolar Desktop",
   "main": "main.js",
   "private": true,
@@ -33,6 +33,7 @@
         "to": "server",
         "filter": [
           "**/*",
+          "!data/**",
           "!node_modules/.cache/**",
           "!puppeteer-cache/**",
           "!data/database.sqlite-shm",

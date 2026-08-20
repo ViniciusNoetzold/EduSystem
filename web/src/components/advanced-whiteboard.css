@@ -102,8 +102,9 @@
 }
 .advanced-canvas {
   position: relative;
-  overflow: auto;
-  min-height: 600px;
+  overflow: hidden;
+  height: min(680px, calc(100vh - 300px));
+  min-height: 560px;
   cursor: crosshair;
   background-color: #0c131b;
   background-image:
@@ -113,7 +114,6 @@
 }
 .advanced-canvas canvas {
   display: block;
-  margin: 0 auto;
 }
 .canvas-hint {
   position: absolute;
@@ -196,7 +196,6 @@
 .canvas-mode-circle,
 .canvas-mode-line,
 .canvas-mode-arrow,
-.canvas-mode-connector,
 .canvas-mode-sticky {
   cursor: crosshair;
 }

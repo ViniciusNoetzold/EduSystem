@@ -7,6 +7,7 @@ import {
   Server,
   Settings2,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { api } from "../services/api";
 import "./institution-settings.css";
@@ -125,7 +126,7 @@ const defaults = {
   ],
 };
 
-export default function InstitutionSettings({ config, setConfig }) {
+export default function InstitutionSettings({ config, setConfig, onOpenTour }) {
   const [form, setForm] = useState({
     ...config,
     modulos: config.modulos || {},
@@ -188,6 +189,23 @@ export default function InstitutionSettings({ config, setConfig }) {
         </div>
       </div>
       <form onSubmit={save} className="institution-settings">
+        <section className="card settings-panel welcome-replay-panel">
+          <div className="settings-panel-title">
+            <div className="settings-icon">
+              <Sparkles size={19} />
+            </div>
+            <div className="welcome-replay-copy">
+              <h3>Apresentação do EduSystem</h3>
+              <p className="muted">
+                Reveja o guia de configuração, rotina pedagógica, segurança e
+                backups sempre que precisar orientar alguém da equipe.
+              </p>
+            </div>
+            <button type="button" className="btn btn-ghost" onClick={onOpenTour}>
+              Rever apresentação
+            </button>
+          </div>
+        </section>
         <section className="card settings-panel">
           <div className="settings-panel-title">
             <div className="settings-icon">

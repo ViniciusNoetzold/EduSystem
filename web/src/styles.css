@@ -867,6 +867,13 @@ td:first-child {
   display: block;
   margin: 17px auto 0;
 }
+.login-security-note {
+  margin: 14px 0 0;
+  color: #7f91a8;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
 .login-orb {
   position: absolute;
   filter: blur(2px);

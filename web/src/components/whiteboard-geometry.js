@@ -189,7 +189,26 @@ function center(bounds) {
   };
 }
 
-export function connectorPath(fromItem, toItem) {
+function handleForSide(bounds, side) {
+  const middleX = bounds.x + bounds.width / 2;
+  const middleY = bounds.y + bounds.height / 2;
+  if (side === "top") return { x: middleX, y: bounds.y };
+  if (side === "right") return { x: bounds.x + bounds.width, y: middleY };
+  if (side === "bottom") return { x: middleX, y: bounds.y + bounds.height };
+  return { x: bounds.x, y: middleY };
+}
+
+export function nearestConnectorSide(item, point) {
+  const handles = connectorHandles(item);
+  if (!handles.length) return null;
+  return handles.reduce((nearest, handle) =>
+    pointDistance(point, handle) < pointDistance(point, nearest)
+      ? handle
+      : nearest,
+  ).side;
+}
+
+export function connectorPath(fromItem, toItem, fromSide, toSide) {
   const fromBounds = getShapeBounds(fromItem);
   const toBounds = getShapeBounds(toItem);
   if (!fromBounds || !toBounds) return [];
@@ -197,6 +216,24 @@ export function connectorPath(fromItem, toItem) {
   const toCenter = center(toBounds);
   const dx = toCenter.x - fromCenter.x;
   const dy = toCenter.y - fromCenter.y;
+
+  if (fromSide && toSide) {
+    const start = handleForSide(fromBounds, fromSide);
+    const end = handleForSide(toBounds, toSide);
+    const horizontalStart = fromSide === "left" || fromSide === "right";
+    const horizontalEnd = toSide === "left" || toSide === "right";
+    if (horizontalStart && horizontalEnd) {
+      const middleX = start.x + (end.x - start.x) / 2;
+      return [start.x, start.y, middleX, start.y, middleX, end.y, end.x, end.y];
+    }
+    if (!horizontalStart && !horizontalEnd) {
+      const middleY = start.y + (end.y - start.y) / 2;
+      return [start.x, start.y, start.x, middleY, end.x, middleY, end.x, end.y];
+    }
+    return horizontalStart
+      ? [start.x, start.y, end.x, start.y, end.x, end.y]
+      : [start.x, start.y, start.x, end.y, end.x, end.y];
+  }
 
   if (Math.abs(dx) >= Math.abs(dy)) {
     const direction = dx >= 0 ? 1 : -1;

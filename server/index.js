@@ -25,11 +25,33 @@ app.use(express.json({ limit: "50mb" }));
 const publicUser = (r) => ({
   id: r.id,
   name: r.nome,
+  username: r.usuario,
   email: r.email,
   role: r.perfil,
   perfil: r.perfil,
 });
 const tokenFor = (r) => jwt.sign(publicUser(r), SECRET, { expiresIn: "30d" });
+const normalizeUsername = (value) =>
+  String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "")
+    .toLowerCase();
+function availableUsername(value, email, ignoreId = null) {
+  const fallback = normalizeUsername(String(email || "").split("@")[0]);
+  const base = normalizeUsername(value) || fallback || "usuario";
+  let candidate = base;
+  let suffix = 1;
+  const exists = db.prepare(
+    "SELECT 1 FROM usuarios WHERE usuario=? AND (? IS NULL OR id<>?)",
+  );
+  while (exists.get(candidate, ignoreId, ignoreId)) {
+    suffix += 1;
+    candidate = `${base}${suffix}`;
+  }
+  return candidate;
+}
 function auth(req, res, next) {
   const token = req.headers.authorization?.replace("Bearer ", "");
   try {
@@ -119,6 +141,10 @@ const userQuery =
 app.get("/api/health", (_, res) =>
   res.json({ ok: true, service: "edusystem-api", database: "sqlite" }),
 );
+app.get("/api/auth/status", (_, res) => {
+  const total = db.prepare("SELECT COUNT(*) total FROM usuarios").get().total;
+  res.json({ setupRequired: total === 0 });
+});
 app.get("/api/configuracoes", auth, (req, res) => {
   const row = db
     .prepare("SELECT valor FROM configuracoes WHERE chave='instituicao'")
@@ -177,34 +203,40 @@ app.put(
   },
 );
 app.post("/api/auth/login", (req, res) => {
-  const { email, password } = req.body;
+  const { email, identifier = email, password } = req.body;
+  const login = String(identifier || "").trim().toLowerCase();
   const row = db
-    .prepare(`${userQuery} WHERE u.email=? AND u.ativo=1 AND p.ativo=1`)
-    .get(
-      String(email || "")
-        .trim()
-        .toLowerCase(),
-    );
+    .prepare(
+      `${userQuery} WHERE (u.email=? OR u.usuario=?) AND u.ativo=1 AND p.ativo=1`,
+    )
+    .get(login, login);
   if (!row || !bcrypt.compareSync(password || "", row.senha_hash))
     return res.status(401).json({ message: "Credenciais inválidas" });
   res.json({ user: publicUser(row), token: tokenFor(row) });
 });
 app.post("/api/auth/register", (req, res) => {
-  const { name, email, password, role = "Pais" } = req.body;
-  if (!name || !email || !password)
+  if (db.prepare("SELECT COUNT(*) total FROM usuarios").get().total > 0)
+    return res.status(403).json({
+      message:
+        "O primeiro acesso já foi concluído. Peça ao diretor para criar novos usuários em Equipe e acessos.",
+    });
+  const { name, username, email, password } = req.body;
+  if (!name || !username || !email || !password)
     return res
       .status(400)
-      .json({ message: "Nome, e-mail e senha são obrigatórios" });
+      .json({ message: "Nome, usuário, e-mail e senha são obrigatórios" });
   try {
-    const p =
-      db.prepare("SELECT id FROM perfis WHERE nome=? AND ativo=1").get(role) ||
-      db.prepare("SELECT id FROM perfis WHERE nome='Pais' AND ativo=1").get();
+    const p = db
+      .prepare("SELECT id FROM perfis WHERE nome='Diretor' AND ativo=1")
+      .get();
+    const login = availableUsername(username, email);
     const id = db
       .prepare(
-        "INSERT INTO usuarios(nome,email,senha_hash,perfil_id) VALUES(?,?,?,?)",
+        "INSERT INTO usuarios(nome,usuario,email,senha_hash,perfil_id) VALUES(?,?,?,?,?)",
       )
       .run(
         name,
+        login,
         email.toLowerCase(),
         bcrypt.hashSync(password, 10),
         p.id,
@@ -216,6 +248,29 @@ app.post("/api/auth/register", (req, res) => {
   }
 });
 app.get("/api/me", auth, (req, res) => res.json(req.user));
+app.get("/api/preferencias/:chave", auth, (req, res) => {
+  const row = db
+    .prepare(
+      "SELECT valor FROM preferencias_usuario WHERE usuario_id=? AND chave=?",
+    )
+    .get(req.user.id, req.params.chave);
+  if (!row) return res.json({ value: null });
+  try {
+    return res.json({ value: JSON.parse(row.valor) });
+  } catch {
+    return res.json({ value: row.valor });
+  }
+});
+app.put("/api/preferencias/:chave", auth, (req, res) => {
+  if (!/^[a-z0-9_.-]{1,80}$/i.test(req.params.chave))
+    return res.status(400).json({ message: "Chave de preferência inválida" });
+  db.prepare(
+    `INSERT INTO preferencias_usuario(usuario_id,chave,valor,atualizado_em)
+     VALUES(?,?,?,CURRENT_TIMESTAMP)
+     ON CONFLICT(usuario_id,chave) DO UPDATE SET valor=excluded.valor,atualizado_em=CURRENT_TIMESTAMP`,
+  ).run(req.user.id, req.params.chave, JSON.stringify(req.body.value));
+  res.json({ ok: true, value: req.body.value });
+});
 app.get("/api/perfis", auth, (req, res) => {
   const status = statusClause(req.query.status, "ativo");
   res.json(
@@ -252,7 +307,7 @@ app.get("/api/usuarios", auth, allow("Diretor", "Coordenador"), (req, res) => {
   res.json(
     db
       .prepare(
-        `SELECT u.id,u.nome,u.email,u.ativo,p.nome perfil,GROUP_CONCAT(DISTINCT e.nome) escolas,GROUP_CONCAT(DISTINCT a.nome) alunos_vinculados FROM usuarios u JOIN perfis p ON p.id=u.perfil_id LEFT JOIN usuario_escolas ue ON ue.usuario_id=u.id LEFT JOIN escolas e ON e.id=ue.escola_id LEFT JOIN usuario_alunos ua ON ua.usuario_id=u.id LEFT JOIN alunos a ON a.id=ua.aluno_id WHERE ${status.sql} GROUP BY u.id ORDER BY u.nome`,
+        `SELECT u.id,u.nome,u.usuario,u.email,u.ativo,p.nome perfil,GROUP_CONCAT(DISTINCT e.nome) escolas,GROUP_CONCAT(DISTINCT a.nome) alunos_vinculados FROM usuarios u JOIN perfis p ON p.id=u.perfil_id LEFT JOIN usuario_escolas ue ON ue.usuario_id=u.id LEFT JOIN escolas e ON e.id=ue.escola_id LEFT JOIN usuario_alunos ua ON ua.usuario_id=u.id LEFT JOIN alunos a ON a.id=ua.aluno_id WHERE ${status.sql} GROUP BY u.id ORDER BY u.nome`,
       )
       .all(...status.args),
   );
@@ -260,6 +315,7 @@ app.get("/api/usuarios", auth, allow("Diretor", "Coordenador"), (req, res) => {
 app.post("/api/usuarios", auth, allow("Diretor"), (req, res) => {
   const {
     nome,
+    usuario,
     email,
     senha,
     perfil = "Professor",
@@ -279,10 +335,11 @@ app.post("/api/usuarios", auth, allow("Diretor"), (req, res) => {
     const id = db.transaction(() => {
       const newId = db
         .prepare(
-          "INSERT INTO usuarios(nome,email,senha_hash,perfil_id) VALUES(?,?,?,?)",
+          "INSERT INTO usuarios(nome,usuario,email,senha_hash,perfil_id) VALUES(?,?,?,?,?)",
         )
         .run(
           nome.trim(),
+          availableUsername(usuario, email),
           email.trim().toLowerCase(),
           bcrypt.hashSync(senha, 10),
           role.id,
@@ -303,7 +360,7 @@ app.post("/api/usuarios", auth, allow("Diretor"), (req, res) => {
   }
 });
 app.put("/api/usuarios/:id", auth, allow("Diretor"), (req, res) => {
-  const { nome, email, perfil, ativo = 1, senha } = req.body;
+  const { nome, usuario, email, perfil, ativo = 1, senha } = req.body;
   const role = db
     .prepare("SELECT id FROM perfis WHERE nome=? AND ativo=1")
     .get(perfil);
@@ -317,11 +374,12 @@ app.put("/api/usuarios/:id", auth, allow("Diretor"), (req, res) => {
       .json({ message: "A nova senha deve ter pelo menos 6 caracteres" });
   const args = [
     nome.trim(),
+    availableUsername(usuario, email, Number(req.params.id)),
     email.trim().toLowerCase(),
     role.id,
     ativo ? 1 : 0,
   ];
-  let sql = "UPDATE usuarios SET nome=?,email=?,perfil_id=?,ativo=?";
+  let sql = "UPDATE usuarios SET nome=?,usuario=?,email=?,perfil_id=?,ativo=?";
   if (senha) {
     sql += ",senha_hash=?";
     args.push(bcrypt.hashSync(senha, 10));

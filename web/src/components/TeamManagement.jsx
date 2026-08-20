@@ -15,6 +15,7 @@ import "./team-management.css";
 
 const empty = {
   nome: "",
+  usuario: "",
   email: "",
   senha: "",
   perfil: "Professor",
@@ -67,8 +68,15 @@ export default function TeamManagement({ notify }) {
     }));
   async function save(event) {
     event.preventDefault();
-    if (!form.nome.trim() || !form.email.trim() || form.senha.length < 6)
-      return notify("Informe nome, e-mail e senha de pelo menos 6 caracteres");
+    if (
+      !form.nome.trim() ||
+      !form.usuario.trim() ||
+      !form.email.trim() ||
+      form.senha.length < 6
+    )
+      return notify(
+        "Informe nome, usuário, e-mail e senha de pelo menos 6 caracteres",
+      );
     try {
       await api.createUsuario(form);
       setForm(empty);
@@ -83,6 +91,7 @@ export default function TeamManagement({ notify }) {
     try {
       await api.updateUsuario(user.id, {
         nome: user.nome,
+        usuario: user.usuario,
         email: user.email,
         perfil: user.perfil,
         ativo: user.ativo ? 0 : 1,
@@ -190,7 +199,7 @@ export default function TeamManagement({ notify }) {
                       </span>
                       <div>
                         <strong>{user.nome}</strong>
-                        <small>{user.email}</small>
+                        <small>@{user.usuario} · {user.email}</small>
                       </div>
                     </div>
                   </td>
@@ -321,6 +330,18 @@ export default function TeamManagement({ notify }) {
                     onChange={(e) =>
                       setForm({ ...form, email: e.target.value })
                     }
+                  />
+                </label>
+                <label>
+                  Nome de usuário *
+                  <input
+                    required
+                    minLength="3"
+                    value={form.usuario}
+                    onChange={(e) =>
+                      setForm({ ...form, usuario: e.target.value })
+                    }
+                    placeholder="ex.: maria.professora"
                   />
                 </label>
                 <label>

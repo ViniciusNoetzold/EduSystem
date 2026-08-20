@@ -4,7 +4,7 @@ Shell Electron portátil que inicia automaticamente a API Express/SQLite e abre 
 
 O executável é criado em `desktop/dist-final/EduSystem-Portable-<versão>.exe`.
 
-O processo desktop cria `C:\EduSystem\dados`, procura uma porta local livre, inicia o backend como subprocesso oculto e carrega o frontend compilado. Os ativos de marca ficam em `desktop/assets`.
+O processo desktop cria `C:\EduSystem\dados`, gera uma chave de sessão exclusiva da instalação, procura uma porta local livre, inicia o backend como subprocesso oculto e carrega o frontend compilado. Os ativos de marca ficam em `desktop/assets`.
 
 ```powershell
 npm ci

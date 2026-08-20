@@ -7,8 +7,10 @@ Sim. O backend executa `server/src/database.js` na inicialização. Esse módulo
 1. cria o arquivo SQLite quando ele ainda não existe;
 2. cria todas as tabelas necessárias;
 3. aplica colunas novas em instalações antigas;
-4. inclui os perfis básicos e dados de demonstração somente quando a base está vazia;
+4. inclui somente os perfis estruturais, sem alunos, turmas ou credenciais demonstrativas;
 5. mantém os registros existentes durante as atualizações.
+
+Na primeira abertura de uma instalação nova, a própria tela de acesso solicita a criação da conta inicial do diretor. Bancos existentes são migrados e preservados; a atualização nunca apaga registros automaticamente.
 
 No executável portátil, o caminho principal é:
 
@@ -52,9 +54,9 @@ Os arquivos `database.sqlite-wal` e `database.sqlite-shm` podem existir enquanto
 | `acompanhamentos` | histórico pedagógico |
 | `escolas` e `universidades` | instituições cadastradas |
 | `quadros` | estado JSON dos quadros brancos |
+| `preferencias_usuario` | apresentação inicial e preferências pessoais por conta |
 | `auditoria` | correções e importações relevantes |
 
 ## Backup
 
 Uma estratégia segura para produção deve manter cópias datadas da pasta `C:\EduSystem\dados`. A sincronização automática entre computadores está apenas documentada no aplicativo e ainda não é ativada por padrão.
-

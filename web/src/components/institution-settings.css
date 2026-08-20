@@ -14,6 +14,16 @@
 .settings-panel-title h3 {
   margin: 0 0 4px;
 }
+.welcome-replay-panel .settings-panel-title {
+  margin-bottom: 0;
+}
+.welcome-replay-copy {
+  flex: 1;
+}
+.welcome-replay-panel .btn {
+  margin-left: auto;
+  white-space: nowrap;
+}
 .settings-icon {
   height: 38px;
   width: 38px;
@@ -226,6 +236,11 @@
   .settings-panel-title {
     align-items: flex-start;
     flex-wrap: wrap;
+  }
+  .welcome-replay-panel .btn {
+    width: 100%;
+    justify-content: center;
+    margin-left: 0;
   }
   .planned-badge {
     margin-left: 0;

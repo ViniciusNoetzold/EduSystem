@@ -14,7 +14,7 @@ db.pragma("journal_mode = WAL");
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS perfis (id INTEGER PRIMARY KEY AUTOINCREMENT,nome TEXT NOT NULL UNIQUE,descricao TEXT,ativo INTEGER NOT NULL DEFAULT 1);
-CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT,nome TEXT NOT NULL,email TEXT NOT NULL UNIQUE COLLATE NOCASE,senha_hash TEXT NOT NULL,perfil_id INTEGER NOT NULL,ativo INTEGER NOT NULL DEFAULT 1,criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(perfil_id) REFERENCES perfis(id));
+CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT,nome TEXT NOT NULL,usuario TEXT UNIQUE COLLATE NOCASE,email TEXT NOT NULL UNIQUE COLLATE NOCASE,senha_hash TEXT NOT NULL,perfil_id INTEGER NOT NULL,ativo INTEGER NOT NULL DEFAULT 1,criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(perfil_id) REFERENCES perfis(id));
 CREATE TABLE IF NOT EXISTS turmas (id INTEGER PRIMARY KEY AUTOINCREMENT,nome TEXT NOT NULL,ano_letivo INTEGER NOT NULL,escola TEXT NOT NULL DEFAULT 'Grupo Horizonte',professor_id INTEGER,FOREIGN KEY(professor_id) REFERENCES usuarios(id));
 CREATE TABLE IF NOT EXISTS alunos (id INTEGER PRIMARY KEY AUTOINCREMENT,nome TEXT NOT NULL,matricula TEXT NOT NULL UNIQUE,data_nascimento TEXT,responsavel TEXT,contato_responsavel TEXT,turma_id INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'Ativo',criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(turma_id) REFERENCES turmas(id));
 CREATE TABLE IF NOT EXISTS notas (id INTEGER PRIMARY KEY AUTOINCREMENT,aluno_id INTEGER NOT NULL,disciplina TEXT NOT NULL,bimestre INTEGER NOT NULL CHECK(bimestre BETWEEN 1 AND 4),ano INTEGER NOT NULL,nota REAL CHECK(nota BETWEEN 0 AND 10),conceito TEXT,UNIQUE(aluno_id,disciplina,bimestre,ano),FOREIGN KEY(aluno_id) REFERENCES alunos(id) ON DELETE CASCADE);
@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS acompanhamentos (id INTEGER PRIMARY KEY AUTOINCREMENT
 CREATE TABLE IF NOT EXISTS usuario_escolas (usuario_id INTEGER NOT NULL,escola_id INTEGER NOT NULL,PRIMARY KEY(usuario_id,escola_id),FOREIGN KEY(usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,FOREIGN KEY(escola_id) REFERENCES escolas(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS usuario_alunos (usuario_id INTEGER NOT NULL,aluno_id INTEGER NOT NULL,PRIMARY KEY(usuario_id,aluno_id),FOREIGN KEY(usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,FOREIGN KEY(aluno_id) REFERENCES alunos(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS auditoria (id INTEGER PRIMARY KEY AUTOINCREMENT,entidade TEXT NOT NULL,entidade_id INTEGER,acao TEXT NOT NULL,dados_json TEXT,criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS preferencias_usuario (usuario_id INTEGER NOT NULL,chave TEXT NOT NULL,valor TEXT NOT NULL,atualizado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(usuario_id,chave),FOREIGN KEY(usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE);
 `);
 
 const ensureColumn = (table, column, definition) => {
@@ -85,6 +86,25 @@ for (const [column, definition] of [
 ensureColumn("notas", "criado_em", "TEXT");
 ensureColumn("notas", "ativo", "INTEGER NOT NULL DEFAULT 1");
 ensureColumn("perfis", "ativo", "INTEGER NOT NULL DEFAULT 1");
+ensureColumn("usuarios", "usuario", "TEXT");
+for (const row of db
+  .prepare("SELECT id,email FROM usuarios WHERE usuario IS NULL OR TRIM(usuario)='' ORDER BY id")
+  .all()) {
+  const localPart = String(row.email || "usuario")
+    .split("@")[0]
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "")
+    .toLowerCase() || "usuario";
+  let candidate = localPart;
+  let suffix = 1;
+  while (db.prepare("SELECT 1 FROM usuarios WHERE usuario=? AND id<>?").get(candidate, row.id)) {
+    suffix += 1;
+    candidate = `${localPart}${suffix}`;
+  }
+  db.prepare("UPDATE usuarios SET usuario=? WHERE id=?").run(candidate, row.id);
+}
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS usuarios_usuario_unique ON usuarios(usuario COLLATE NOCASE)");
 db.prepare(
   "UPDATE notas SET criado_em=COALESCE(criado_em,CURRENT_TIMESTAMP)",
 ).run();
@@ -102,18 +122,22 @@ try {
   if (!String(error.message).includes("duplicate column")) throw error;
 }
 
+const insertPerfil = db.prepare(
+  "INSERT OR IGNORE INTO perfis(nome,descricao) VALUES(?,?)",
+);
+for (const profile of [
+  ["Diretor", "Acesso completo"],
+  ["Coordenador", "Gestão pedagógica"],
+  ["Professor", "Turmas e alunos vinculados"],
+  ["Secretário", "Cadastros e relatórios"],
+  ["Pais", "Acompanhamento do aluno"],
+])
+  insertPerfil.run(...profile);
+
+// A edição distribuída cria somente o esquema. Dados demonstrativos são
+// opcionais para desenvolvimento e nunca entram no primeiro uso do professor.
+if (process.env.EDUSYSTEM_SEED_DEMO === "1") {
 db.transaction(() => {
-  const insertPerfil = db.prepare(
-    "INSERT OR IGNORE INTO perfis(nome,descricao) VALUES(?,?)",
-  );
-  for (const p of [
-    ["Diretor", "Acesso completo"],
-    ["Coordenador", "Gestão pedagógica"],
-    ["Professor", "Turmas e alunos vinculados"],
-    ["Secretário", "Cadastros e relatórios"],
-    ["Pais", "Acompanhamento do aluno"],
-  ])
-    insertPerfil.run(...p);
   let diretor = db
     .prepare("SELECT id FROM usuarios WHERE email=?")
     .get("diretora@escola.com");
@@ -311,6 +335,7 @@ db.transaction(() => {
     }
   }
 })();
+}
 
 // Corrige vínculos legados impossíveis sem apagar o histórico: o vínculo anterior
 // fica registrado em auditoria e pode ser consultado em uma migração futura.

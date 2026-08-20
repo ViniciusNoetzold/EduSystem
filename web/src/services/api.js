@@ -7,9 +7,7 @@ const API_URL =
 
 async function request(path, options = {}) {
   const token = JSON.parse(
-    localStorage.getItem("gestao_user") ||
-      sessionStorage.getItem("gestao_user") ||
-      "null",
+    sessionStorage.getItem("gestao_user") || "null",
   )?.token;
   const response = await fetch(`${API_URL}${path}`, {
     headers: {
@@ -27,10 +25,11 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  login: (email, password) =>
+  authStatus: () => request("/auth/status"),
+  login: (identifier, password) =>
     request("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ identifier, password }),
     }),
   register: (payload) =>
     request("/auth/register", {
@@ -38,6 +37,12 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   me: () => request("/me"),
+  preference: (key) => request(`/preferencias/${encodeURIComponent(key)}`),
+  savePreference: (key, value) =>
+    request(`/preferencias/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    }),
   perfis: (params = "") => request(`/perfis${params ? `?${params}` : ""}`),
   setPerfilStatus: (id, ativo) =>
     request(`/perfis/${id}/status`, {
@@ -187,9 +192,9 @@ export const api = {
 };
 
 export async function requestBlob(path) {
-  const token =
-    JSON.parse(localStorage.getItem("gestao_user") || "null")?.token ||
-    JSON.parse(sessionStorage.getItem("gestao_user") || "null")?.token;
+  const token = JSON.parse(
+    sessionStorage.getItem("gestao_user") || "null",
+  )?.token;
   const response = await fetch(`${API_URL}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
