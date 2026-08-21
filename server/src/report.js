@@ -14,7 +14,7 @@ const avg = (values) =>
 const tone = (value) =>
   n(value) >= 7 ? "good" : n(value) >= 5 ? "warn" : "risk";
 
-export function createReportHandler({ puppeteer, chromePath }) {
+export function createReportHandler({ loadPuppeteer, chromePath }) {
   return async (req, res) => {
     const ano = Number(req.query.ano || new Date().getFullYear());
     const role = String(req.user?.role || "")
@@ -214,6 +214,7 @@ export function createReportHandler({ puppeteer, chromePath }) {
       '<footer class="foot"><span>EduSystem · Gestão escolar</span><span>Relatório individual · Consulte a equipe pedagógica para interpretar os indicadores</span></footer></main></body></html>';
     let browser;
     try {
+      const puppeteer = await loadPuppeteer();
       browser = await puppeteer.launch({
         headless: true,
         ...(chromePath ? { executablePath: chromePath } : {}),
@@ -242,7 +243,7 @@ export function createReportHandler({ puppeteer, chromePath }) {
   };
 }
 
-export function createClassReportHandler({ puppeteer, chromePath }) {
+export function createClassReportHandler({ loadPuppeteer, chromePath }) {
   return async (req, res) => {
     const ano = Number(req.query.ano || new Date().getFullYear());
     const role = String(req.user?.role || "")
@@ -302,6 +303,7 @@ export function createClassReportHandler({ puppeteer, chromePath }) {
     </style></head><body><main class="page"><header class="brand"><div class="logo"><i>E</i><b>edu<span>system</span></b></div><div class="generated">RELATÓRIO CONSOLIDADO<br><strong>${esc(generated)}</strong></div></header><section class="hero"><div><h1>Relatório da turma</h1><strong>${esc(turma.nome)}</strong><p>${esc(turma.escola_nome || turma.escola)} · ${ano}</p><p>Professor(a): ${esc(turma.professor_nome || "Não informado")}</p></div><div><strong>${alunos.length}</strong><p>alunos ativos</p></div></section><section class="section"><div class="section-title"><h2>Resumo executivo</h2><span>Indicadores consolidados do período</span></div><div class="cards"><div class="metric"><label>Alunos</label><strong>${alunos.length}</strong></div><div class="metric"><label>Média da turma</label><strong>${media.toFixed(1)}</strong></div><div class="metric"><label>Frequência</label><strong>${frequencia.toFixed(0)}%</strong></div><div class="metric"><label>Comportamento</label><strong>${comportamento.toFixed(1)}/10</strong></div></div></section><section class="section analysis"><div class="panel"><h3>Destaques acadêmicos</h3>${bars}</div><div class="panel"><h3>Leitura da turma</h3><p>A turma apresenta média <strong>${media.toFixed(1)}</strong> e frequência média de <strong>${frequencia.toFixed(0)}%</strong>.</p><p style="margin-top:8px">${frequencia >= 75 ? "A presença está dentro do parâmetro esperado." : "A frequência requer acompanhamento da equipe pedagógica."}</p><p style="margin-top:8px">Os registros pedagógicos ajudam a contextualizar os números para reuniões e planos de intervenção.</p></div></section><section class="section"><div class="section-title"><h2>Alunos e indicadores</h2><span>Visão individual para acompanhamento</span></div><table><thead><tr><th>#</th><th>Aluno</th><th>Média</th><th>Frequência</th><th>Comportamento</th><th>Registros</th></tr></thead><tbody>${rows}</tbody></table></section><footer class="foot"><span>EduSystem · Gestão escolar</span><span>Relatório da turma ${esc(turma.nome)} · ${ano}</span></footer></main></body></html>`;
     let browser;
     try {
+      const puppeteer = await loadPuppeteer();
       browser = await puppeteer.launch({
         headless: true,
         ...(chromePath ? { executablePath: chromePath } : {}),

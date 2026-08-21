@@ -9,6 +9,7 @@ import { randomBytes } from "node:crypto";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let backend;
 let apiOrigin;
+let backendLogPath;
 
 function findAvailablePort(start = 3333) {
   return new Promise((resolve, reject) => {
@@ -25,6 +26,11 @@ function findAvailablePort(start = 3333) {
 }
 
 function resolveDataDirectory() {
+  const configured = String(process.env.EDUSYSTEM_DATA_DIR || "").trim();
+  if (configured) {
+    fs.mkdirSync(configured, { recursive: true });
+    return configured;
+  }
   const preferred = path.join(process.env.SystemDrive || "C:", "EduSystem");
   const fallback = path.join(app.getPath("userData"), "data");
   try {
@@ -86,10 +92,17 @@ function startBackend(port) {
       "server",
       "puppeteer-cache",
     );
+  backendLogPath = path.join(dataDirectory, "backend.log");
+  fs.writeFileSync(
+    backendLogPath,
+    `[${new Date().toISOString()}] Iniciando EduSystem API na porta ${port}\n`,
+    "utf8",
+  );
+  const backendLog = fs.openSync(backendLogPath, "a");
   backend = spawn(process.execPath, [serverPath], {
     cwd: path.dirname(serverPath),
     env,
-    stdio: "ignore",
+    stdio: ["ignore", backendLog, backendLog],
     windowsHide: true,
   });
   backend.on("error", (error) =>
@@ -99,15 +112,16 @@ function startBackend(port) {
     ),
   );
   backend.on("exit", (code) => {
+    fs.closeSync(backendLog);
     if (code && !app.isQuitting)
       dialog.showErrorBox(
         "EduSystem API",
-        `A API foi encerrada inesperadamente (código ${code}).`,
+        `A API foi encerrada inesperadamente (código ${code}).\nDetalhes: ${backendLogPath}`,
       );
   });
 }
 
-async function waitForBackend(timeoutMs = 15000) {
+async function waitForBackend(timeoutMs = 30000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     try {
@@ -152,7 +166,7 @@ app.whenReady().then(async () => {
   if (!(await waitForBackend())) {
     dialog.showErrorBox(
       "EduSystem",
-      "O banco de dados e a API local não responderam em 15 segundos.",
+      `O banco de dados e a API local não responderam em 30 segundos.\nDetalhes: ${backendLogPath}`,
     );
     app.quit();
     return;

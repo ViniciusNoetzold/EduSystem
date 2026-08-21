@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import puppeteer from "puppeteer";
 import fs from "node:fs";
 import db from "./src/database.js";
 import { createClassReportHandler, createReportHandler } from "./src/report.js";
@@ -18,8 +17,11 @@ const chromeCandidates = [
 ];
 const chromePath =
   process.env.PUPPETEER_EXECUTABLE_PATH || chromeCandidates.find(fs.existsSync);
-const reportAluno = createReportHandler({ puppeteer, chromePath });
-const reportTurma = createClassReportHandler({ puppeteer, chromePath });
+let puppeteerPromise;
+const loadPuppeteer = () =>
+  (puppeteerPromise ||= import("puppeteer").then((module) => module.default));
+const reportAluno = createReportHandler({ loadPuppeteer, chromePath });
+const reportTurma = createClassReportHandler({ loadPuppeteer, chromePath });
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 const publicUser = (r) => ({
@@ -143,7 +145,8 @@ app.get("/api/health", (_, res) =>
 );
 app.get("/api/auth/status", (_, res) => {
   const total = db.prepare("SELECT COUNT(*) total FROM usuarios").get().total;
-  res.json({ setupRequired: total === 0 });
+  res.set("Cache-Control", "no-store");
+  res.json({ setupRequired: total === 0, userCount: total });
 });
 app.get("/api/configuracoes", auth, (req, res) => {
   const row = db
@@ -221,30 +224,47 @@ app.post("/api/auth/register", (req, res) => {
         "O primeiro acesso já foi concluído. Peça ao diretor para criar novos usuários em Equipe e acessos.",
     });
   const { name, username, email, password } = req.body;
-  if (!name || !username || !email || !password)
+  const fullName = String(name || "").trim();
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const normalizedLogin = normalizeUsername(username);
+  if (!fullName || !normalizedLogin || !normalizedEmail || !password)
     return res
       .status(400)
       .json({ message: "Nome, usuário, e-mail e senha são obrigatórios" });
+  if (normalizedLogin.length < 3)
+    return res
+      .status(400)
+      .json({ message: "O nome de usuário deve ter pelo menos 3 caracteres" });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail))
+    return res.status(400).json({ message: "Informe um e-mail válido" });
+  if (String(password).length < 8)
+    return res
+      .status(400)
+      .json({ message: "A senha deve ter pelo menos 8 caracteres" });
   try {
     const p = db
       .prepare("SELECT id FROM perfis WHERE nome='Diretor' AND ativo=1")
       .get();
-    const login = availableUsername(username, email);
+    const login = availableUsername(normalizedLogin, normalizedEmail);
     const id = db
       .prepare(
         "INSERT INTO usuarios(nome,usuario,email,senha_hash,perfil_id) VALUES(?,?,?,?,?)",
       )
       .run(
-        name,
+        fullName,
         login,
-        email.toLowerCase(),
+        normalizedEmail,
         bcrypt.hashSync(password, 10),
         p.id,
       ).lastInsertRowid;
     const row = db.prepare(`${userQuery} WHERE u.id=?`).get(id);
     res.status(201).json({ user: publicUser(row), token: tokenFor(row) });
-  } catch {
-    res.status(409).json({ message: "E-mail já cadastrado" });
+  } catch (error) {
+    if (String(error.message).includes("UNIQUE"))
+      return res
+        .status(409)
+        .json({ message: "E-mail ou nome de usuário já cadastrado" });
+    res.status(400).json({ message: error.message });
   }
 });
 app.get("/api/me", auth, (req, res) => res.json(req.user));

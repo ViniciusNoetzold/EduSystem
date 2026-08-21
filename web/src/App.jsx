@@ -95,29 +95,72 @@ function Toast({ message, onClose }) {
   );
 }
 function Login({ onLogin }) {
-  const [first, setFirst] = useState(null);
+  const [mode, setMode] = useState("loading");
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [identifier, setIdentifier] = useState(
     () => localStorage.getItem("edusystem_last_login") || "",
   );
   const [password, setPassword] = useState("");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [remember, setRemember] = useState(
     () => Boolean(localStorage.getItem("edusystem_last_login")),
   );
   const [error, setError] = useState("");
-  useEffect(() => {
-    api
-      .authStatus()
-      .then((status) => setFirst(Boolean(status.setupRequired)))
-      .catch((requestError) => {
-        setFirst(false);
-        setError(requestError.message);
-      });
+  const [submitting, setSubmitting] = useState(false);
+  const first = mode === "setup";
+
+  const refreshAccessMode = useCallback(async () => {
+    setMode("loading");
+    setError("");
+    try {
+      const status = await api.authStatus();
+      setMode(status.setupRequired ? "setup" : "login");
+      return status;
+    } catch (requestError) {
+      setMode("unavailable");
+      setError(
+        `${requestError.message}. Não foi possível verificar se este computador já possui uma conta.`,
+      );
+      return null;
+    }
   }, []);
+
+  useEffect(() => {
+    refreshAccessMode();
+  }, [refreshAccessMode]);
+
+  async function requestFirstAccess() {
+    setError("");
+    setSubmitting(true);
+    try {
+      const status = await api.authStatus();
+      if (status.setupRequired) {
+        setPassword("");
+        setMode("setup");
+      } else {
+        setError(
+          "Este computador já possui uma conta. Entre com o usuário cadastrado ou peça ao diretor para criar outro acesso.",
+        );
+      }
+    } catch (requestError) {
+      setMode("unavailable");
+      setError(
+        `${requestError.message}. Verifique se o EduSystem conseguiu iniciar e tente novamente.`,
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function submit(e) {
     e.preventDefault();
     setError("");
+    if (first && password !== passwordConfirmation) {
+      setError("A confirmação da senha não confere");
+      return;
+    }
+    setSubmitting(true);
     try {
       const r = first
         ? await api.register({
@@ -134,7 +177,24 @@ function Login({ onLogin }) {
       else localStorage.removeItem("edusystem_last_login");
       onLogin(user);
     } catch (e) {
+      if (!first) {
+        try {
+          const status = await api.authStatus();
+          if (status.setupRequired) {
+            setMode("setup");
+            setPassword("");
+            setError(
+              "Nenhuma conta foi encontrada. Crie agora o primeiro acesso do diretor.",
+            );
+            return;
+          }
+        } catch {
+          /* mantém a mensagem original do login */
+        }
+      }
       setError(e.message);
+    } finally {
+      setSubmitting(false);
     }
   }
   return (
@@ -146,24 +206,32 @@ function Login({ onLogin }) {
         </div>
         <p className="eyebrow">EDUSYSTEM</p>
         <h1>
-          {first === null
+          {mode === "loading"
             ? "Preparando seu acesso"
             : first
               ? "Primeiro acesso"
-              : "Bem-vindo de volta"}
+              : mode === "unavailable"
+                ? "Não foi possível iniciar"
+                : "Bem-vindo de volta"}
         </h1>
         <p className="muted">
-          {first
-            ? "Crie a conta inicial do diretor para configurar a instituição."
-            : "Informe sua senha para acessar os dados protegidos deste computador."}
+          {mode === "loading"
+            ? "Verificando com segurança os dados deste computador."
+            : first
+              ? "Crie a conta inicial do diretor para configurar a instituição."
+              : mode === "unavailable"
+                ? "O acesso não será exibido até o banco local responder."
+                : "Informe sua senha para acessar os dados protegidos deste computador."}
         </p>
-        {first !== null && <form onSubmit={submit}>
+        {(mode === "setup" || mode === "login") && <form onSubmit={submit}>
           {first && (
             <>
               <label>
                 Nome completo
                 <input
                   required
+                  name="fullName"
+                  autoComplete="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
@@ -173,6 +241,8 @@ function Login({ onLogin }) {
                 <input
                   required
                   minLength={3}
+                  name="username"
+                  autoComplete="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="ex.: ana.diretora"
@@ -184,6 +254,8 @@ function Login({ onLogin }) {
             {first ? "E-mail" : "E-mail ou usuário"}
             <input
               required
+              name="identifier"
+              autoComplete={first ? "email" : "username"}
               type={first ? "email" : "text"}
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
@@ -194,13 +266,30 @@ function Login({ onLogin }) {
             Senha
             <input
               required
-              minLength={6}
+              minLength={first ? 8 : undefined}
+              name="password"
+              autoComplete={first ? "new-password" : "current-password"}
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="123456"
+              placeholder={first ? "mínimo de 8 caracteres" : "sua senha"}
             />
           </label>
+          {first && (
+            <label>
+              Confirmar senha
+              <input
+                required
+                minLength={8}
+                name="passwordConfirmation"
+                autoComplete="new-password"
+                type="password"
+                value={passwordConfirmation}
+                onChange={(e) => setPasswordConfirmation(e.target.value)}
+                placeholder="digite a senha novamente"
+              />
+            </label>
+          )}
           <label className="check">
             <input
               type="checkbox"
@@ -210,14 +299,33 @@ function Login({ onLogin }) {
             Salvar somente o e-mail/usuário neste dispositivo
           </label>
           {error && <p className="form-error">{error}</p>}
-          <Button className="full">
-            {first ? "Criar acesso" : "Entrar"} <ChevronRight size={16} />
+          <Button className="full" disabled={submitting}>
+            {submitting ? "Aguarde..." : first ? "Criar acesso" : "Entrar"}{" "}
+            {!submitting && <ChevronRight size={16} />}
           </Button>
         </form>}
-        {!first && first !== null && (
-          <p className="login-security-note">
-            A senha e a sessão nunca ficam salvas após fechar o EduSystem.
-          </p>
+        {mode === "unavailable" && (
+          <div className="login-recovery">
+            {error && <p className="form-error">{error}</p>}
+            <Button className="full" onClick={refreshAccessMode}>
+              Tentar novamente
+            </Button>
+          </div>
+        )}
+        {mode === "login" && (
+          <>
+            <button
+              type="button"
+              className="text-button first-access-link"
+              onClick={requestFirstAccess}
+              disabled={submitting}
+            >
+              Primeiro acesso neste computador
+            </button>
+            <p className="login-security-note">
+              A senha e a sessão nunca ficam salvas após fechar o EduSystem.
+            </p>
+          </>
         )}
       </div>
     </main>

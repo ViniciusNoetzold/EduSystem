@@ -35,6 +35,7 @@ Se a unidade `C:` não estiver disponível para escrita, os dados são criados n
 - perfis Diretor, Coordenador, Professor, Secretário e Pais;
 - permissões e vínculos por usuário;
 - login obrigatório em toda abertura, salvando opcionalmente somente o identificador;
+- criação guiada da primeira conta do diretor, com recuperação explícita na tela de login;
 - apresentação orientada no primeiro acesso de cada usuário;
 - banco SQLite persistente criado e migrado automaticamente.
 

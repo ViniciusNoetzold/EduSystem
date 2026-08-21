@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import puppeteer from "puppeteer";
+import { browserLaunchOptions } from "./browser-launch.mjs";
 
 const webUrl = process.env.EDUSYSTEM_TEST_WEB_URL;
 if (!webUrl) throw new Error("Defina EDUSYSTEM_TEST_WEB_URL para executar o smoke test");
 const stickyText = `Planejamento da aula ${Date.now()}`;
 
-const browser = await puppeteer.launch({ headless: true });
+const browser = await puppeteer.launch(browserLaunchOptions());
 try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1500, height: 1000, deviceScaleFactor: 1 });

@@ -1,8 +1,10 @@
 {
   "name": "edusystem-desktop",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "EduSystem Gestão Escolar Desktop",
+  "author": "ViniciusNoetzold",
   "main": "main.js",
+  "type": "module",
   "private": true,
   "scripts": {
     "start": "electron .",
@@ -36,6 +38,9 @@
           "!data/**",
           "!node_modules/.cache/**",
           "!puppeteer-cache/**",
+          "!scripts/**",
+          "!README.md",
+          "!package-lock.json",
           "!data/database.sqlite-shm",
           "!data/database.sqlite-wal"
         ]
